@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Victoria LGAs Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body { margin: 0; }
+    #map { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script>
+    // Initialize the map centered on Victoria
+    const map = L.map('map').setView([-37.5, 144.5], 7);
+
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Load and display the GeoJSON
+    fetch('vic_lga_cleaned.geojson')
+      .then(res => res.json())
+      .then(geojson => {
+        L.geoJSON(geojson, {
+          style: {
+            color: '#444',
+            weight: 1,
+            fillColor: '#99ccff',
+            fillOpacity: 0.6
+          },
+          onEachFeature: (feature, layer) => {
+            const name = feature.properties.LGA_NAME || feature.properties.lga_name || 'Unknown';
+            layer.bindPopup(`<strong>${name}</strong>`);
+          }
+        }).addTo(map);
+      })
+      .catch(err => {
+        console.error('Error loading GeoJSON:', err);
+      });
+  </script>
+</body>
+</html>
