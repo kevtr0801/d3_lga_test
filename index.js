@@ -55,6 +55,7 @@ app.get('/preview/:table', async (req, res) => {
     'Language',
     'LgaLanguageProficiency',
     'LgaNationality',
+    'LgaNationalityYear',
     'CouncilInfo',
     'Postcode'
   ];

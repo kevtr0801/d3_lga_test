@@ -31,7 +31,7 @@
 
   <script>
     /* ----------  map initialisation ---------- */
-    const map = L.map('map').setView([-37.5, 144.5], 7);
+    const map = L.map('map').setView([-37.5, 144.5], 7); // set to VIC
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
@@ -97,8 +97,8 @@
 
           const svg = d3.select(plotEl)
                         .append('svg')
-                        .attr('width', 400)
-                        .attr('height', 260);
+                        .attr('width', 900)
+                        .attr('height', 600);
 
           const m  = {top:10, right:10, bottom:40, left:150};
           const w  = +svg.attr('width')  - m.left - m.right;
@@ -121,12 +121,12 @@
             .transition().duration(750)
               .attr('width', d=>x(d.count));
 
-          g.selectAll('text.val').data(data).enter()
-            .append('text')
-              .attr('class','val')
-              .attr('y', d=>y(d.nationality)+y.bandwidth()/2+4)
-              .attr('x', d=>x(d.count)+4)
-              .text(d=>d.count);
+          // g.selectAll('text.val').data(data).enter()
+          //   .append('text')
+          //     .attr('class','val')
+          //     .attr('y', d=>y(d.nationality)+y.bandwidth()/2+4)
+          //     .attr('x', d=>x(d.count)+4)
+          //     .text(d=>d.count);
 
           g.append('g').call(d3.axisLeft(y));
           g.append('g').attr('transform',`translate(0,${h})`)
