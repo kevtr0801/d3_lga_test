@@ -1,0 +1,37 @@
+/* styles.css */
+
+/* map container */
+#map {
+    width: 100vw;
+    height: 100vh;
+  }
+  
+  /* slide-in data panel */
+  #chart-panel {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 420px;           
+    max-height: 90vh;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 0 10px rgba(0,0,0,.2);
+    padding: 15px;
+    display: none;
+    z-index: 999;
+  }
+  
+  #chart-panel h4 { margin: 0 0 8px; }
+  
+  button { margin: 5px 0; }
+  
+  /* bars in nationality chart */
+  .bar {
+    fill: #5a9;
+  }
+  
+  .bar:hover {
+    fill: #f3903f;
+  }
+  

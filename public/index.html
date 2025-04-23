@@ -1,47 +1,170 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  Simple Leaflet + D3 demo for Victoria LGAs
+  D3 gallery refs: https://d3-graph-gallery.com/graph/barplot_horizontal.html
+-->
+<html lang="en
 <head>
   <meta charset="utf-8" />
   <title>Victoria LGAs Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- 3rd-party libs -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    body { margin: 0; }
-    #map { width: 100vw; height: 100vh; }
-  </style>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <!-- your own stylesheet -->
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+
+  <!-- map container -->
   <div id="map"></div>
 
+  <!-- slide-in chart panel -->
+  <div id="chart-panel">
+    <h4 id="chart-title">LGA Info</h4>
+    <button id="close-btn">Close</button>
+    <div id="popup-plot"></div>
+  </div>
+
   <script>
-    // Initialize the map centered on Victoria
+    /* ----------  map initialisation ---------- */
     const map = L.map('map').setView([-37.5, 144.5], 7);
 
-    // Add OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+      attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // Load and display the GeoJSON
+    /* ----------  helper to open the side-panel ---------- */
+    const panel   = document.getElementById('chart-panel');
+    const titleEl = document.getElementById('chart-title');
+    const plotEl  = document.getElementById('popup-plot');
+    document.getElementById('close-btn')
+            .onclick = () => (panel.style.display = 'none');
+
+    function showPanel(title) {
+      titleEl.textContent   = title;
+      panel.style.display   = 'block';
+      plotEl.innerHTML      = '';        // clear previous chart
+    }
+
+    /* ----------  load GeoJSON and attach popups ---------- */
     fetch('vic_lga_cleaned.geojson')
-      .then(res => res.json())
+      .then(r => r.json())
       .then(geojson => {
         L.geoJSON(geojson, {
-          style: {
-            color: '#444',
-            weight: 1,
-            fillColor: '#99ccff',
-            fillOpacity: 0.6
-          },
-          onEachFeature: (feature, layer) => {
-            const name = feature.properties.LGA_NAME || feature.properties.lga_name || 'Unknown';
-            layer.bindPopup(`<strong>${name}</strong>`);
+          style: { color:'#444', weight:1, fillColor:'#99ccff', fillOpacity:0.6 },
+          onEachFeature: (f, layer) => {
+            const name    = f.properties.LGA_NAME  || f.properties.lga_name  || 'Unknown';
+            const lgaCode = f.properties.LGA_CODE24|| f.properties.lga_code  || f.properties.code;
+
+            layer.bindPopup(`
+              <div style="width:260px">
+                <strong>${name}</strong><br/>
+                <button onclick="viewStats(${lgaCode})">View Statistics</button>
+                <button onclick="viewNationalities(${lgaCode}, '${name}')">View Nationalities</button>
+                <button onclick="viewLanguage(${lgaCode})">View Language</button>
+              </div>`);
           }
         }).addTo(map);
-      })
-      .catch(err => {
-        console.error('Error loading GeoJSON:', err);
       });
+
+    /* ----------  Stats table ---------- */
+    function viewStats(code) {
+      fetch(`/api/lga/statistics-full?code=${code}`)
+        .then(r => r.json())
+        .then(d => {
+          showPanel('LGA Statistics');
+          plotEl.innerHTML = `
+            <ul>
+              <li>Born overseas: ${d.born_overseas}</li>
+              <li>Median age: ${d.median_age_years}</li>
+              <li>Proficient English: ${d.pct_proficient_english}%</li>
+              <li>Completed Year 12: ${d.pct_completed_year_12}%</li>
+              <li>Bachelor degree: ${d.pct_bachelor_degree}%</li>
+            </ul>`;
+        });
+    }
+
+    /* ----------  Horizontal bar: top-10 nationalities ---------- */
+    function viewNationalities(code, name) {
+      fetch(`/api/lga/nationalities/${code}`)
+        .then(r => r.json())
+        .then(raw => {
+          showPanel(`Top 10 Nationalities in ${name}`);
+
+          const svg = d3.select(plotEl)
+                        .append('svg')
+                        .attr('width', 400)
+                        .attr('height', 260);
+
+          const m  = {top:10, right:10, bottom:40, left:150};
+          const w  = +svg.attr('width')  - m.left - m.right;
+          const h  = +svg.attr('height') - m.top  - m.bottom;
+          const g  = svg.append('g').attr('transform',`translate(${m.left},${m.top})`);
+
+          const data = raw.sort((a,b)=>b.count-a.count).slice(0,10);
+          const y = d3.scaleBand().domain(data.map(d=>d.nationality))
+                                 .range([0,h]).padding(0.15);
+          const x = d3.scaleLinear().domain([0,d3.max(data,d=>d.count)]).nice().range([0,w]);
+          const col = d3.scaleOrdinal(d3.schemeCategory10);
+
+          g.selectAll('rect').data(data).enter()
+            .append('rect')
+              .attr('y', d=>y(d.nationality))
+              .attr('height', y.bandwidth())
+              .attr('x', 0)
+              .attr('width', 0)
+              .attr('fill', d=>col(d.nationality))
+            .transition().duration(750)
+              .attr('width', d=>x(d.count));
+
+          g.selectAll('text.val').data(data).enter()
+            .append('text')
+              .attr('class','val')
+              .attr('y', d=>y(d.nationality)+y.bandwidth()/2+4)
+              .attr('x', d=>x(d.count)+4)
+              .text(d=>d.count);
+
+          g.append('g').call(d3.axisLeft(y));
+          g.append('g').attr('transform',`translate(0,${h})`)
+                       .call(d3.axisBottom(x).ticks(4));
+        });
+    }
+
+    /* ----------  Pie: English proficiency for chosen language ---------- */
+    function viewLanguage(code) {
+      const lang = prompt('Enter a language (e.g. Mandarin):');
+      if (!lang) return;
+
+      fetch(`/api/lga/language-proficiency/${code}?language=${encodeURIComponent(lang)}`)
+        .then(r => r.json())
+        .then(data => {
+          showPanel(`English Proficiency – ${lang}`);
+
+          const svg = d3.select(plotEl).append('svg')
+                        .attr('width', 280).attr('height', 220);
+          const R   = 100;
+          const g   = svg.append('g').attr('transform','translate(140,110)');
+          const pie = d3.pie().value(d=>d.count);
+          const arc = d3.arc().outerRadius(R).innerRadius(0);
+          const col = d3.scaleOrdinal(d3.schemeCategory10);
+
+          g.selectAll('path').data(pie(data)).enter()
+            .append('path')
+              .attr('d', arc)
+              .attr('fill',(d,i)=>col(i));
+
+          g.selectAll('text').data(pie(data)).enter()
+            .append('text')
+              .attr('transform',d=>`translate(${arc.centroid(d)})`)
+              .attr('text-anchor','middle')
+              .attr('font-size','10px')
+              .text(d=>d.data.english_profiency_level);
+        });
+    }
   </script>
 </body>
 </html>
