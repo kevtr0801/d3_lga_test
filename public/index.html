@@ -1,170 +1,309 @@
 <!DOCTYPE html>
-<!--
-  Simple Leaflet + D3 demo for Victoria LGAs
-  D3 gallery refs: https://d3-graph-gallery.com/graph/barplot_horizontal.html
--->
-<html lang="en
+<!-- Leaflet + D3 demo for Victoria LGAs (prettified, same logic) -->
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;700&display=swap" rel="stylesheet">
+
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Victoria LGAs Map</title>
 
-  <!-- 3rd-party libs -->
-  <link rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- libs -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
-  <!-- your own stylesheet -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
-  <!-- map container -->
-  <div id="map"></div>
+<!-- map + side panel -->
+<div id="map"></div>
 
-  <!-- slide-in chart panel -->
-  <div id="chart-panel">
-    <h4 id="chart-title">LGA Info</h4>
-    <button id="close-btn">Close</button>
-    <div id="popup-plot"></div>
-  </div>
+<div id="chart-panel">
+  <h4 id="chart-title">LGA Info</h4>
+  <button id="close-btn">Close</button>
+  <div id="popup-plot"></div>
+  <div id="tooltip" class="tooltip"></div>
+</div>
 
-  <script>
-    /* ----------  map initialisation ---------- */
-    const map = L.map('map').setView([-37.5, 144.5], 7); // set to VIC
+<script>
+/* Leaflet map */
+const map = L.map('map').setView([-37.5, 144.5], 7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
+/* cached DOM refs */
+const panel   = document.getElementById('chart-panel');
+const titleEl = document.getElementById('chart-title');
+const plotEl  = document.getElementById('popup-plot');
+const tooltip = d3.select('#tooltip');
+
+document.getElementById('close-btn').onclick = () => (panel.style.display = 'none');
+
+function showPanel(title) {
+  titleEl.textContent = title;
+  panel.style.display = 'block';
+  plotEl.innerHTML = '';
+  tooltip.style('opacity', 0);
+}
+
+/* load GeoJSON + pop‑ups */
+fetch('vic_lga_cleaned.geojson')
+  .then(r => r.json())
+  .then(geo => {
+    L.geoJSON(geo, {
+      style: { color: '#444', weight: 1, fillColor: '#99ccff', fillOpacity: 0.6 },
+      onEachFeature: (f, layer) => {
+        const name = f.properties.LGA_NAME || f.properties.lga_name || 'Unknown';
+        const code = f.properties.LGA_CODE24 || f.properties.lga_code || f.properties.code;
+        layer.bindPopup(`
+          <div style="width:260px">
+            <strong>${name}</strong><br/>
+            <button onclick="viewStats(${code})">View Statistics</button>
+            <button onclick="viewNationalities(${code}, '${name}')">View Nationalities</button>
+            <button onclick="viewNationalityRace(${code}, '${name}')">Play bar-race</button>
+            <button onclick="viewLanguage(${code})">View Language</button>
+          </div>`);
+      }
     }).addTo(map);
+  });
 
-    /* ----------  helper to open the side-panel ---------- */
-    const panel   = document.getElementById('chart-panel');
-    const titleEl = document.getElementById('chart-title');
-    const plotEl  = document.getElementById('popup-plot');
-    document.getElementById('close-btn')
-            .onclick = () => (panel.style.display = 'none');
+/* --- stats list --- */
+function viewStats(code) {
+  fetch(`/api/lga/statistics-full?code=${code}`)
+    .then(r => r.json())
+    .then(d => {
+      showPanel('LGA Statistics');
+      plotEl.innerHTML = `
+        <ul>
+          <li>Born overseas: ${d.born_overseas}</li>
+          <li>Median age: ${d.median_age_years}</li>
+          <li>Proficient English: ${d.pct_proficient_english}%</li>
+          <li>Completed Year 12: ${d.pct_completed_year_12}%</li>
+          <li>Bachelor degree: ${d.pct_bachelor_degree}%</li>
+        </ul>`;
+    });
+}
 
-    function showPanel(title) {
-      titleEl.textContent   = title;
-      panel.style.display   = 'block';
-      plotEl.innerHTML      = '';        // clear previous chart
-    }
+/* --- nationality bar chart --- */
+function viewNationalities(code, lgaName) {
+  fetch(`/api/lga/nationalities/${code}`)
+    .then(r => r.json())
+    .then(all => {
+      showPanel('Nationality Trends');
+      plotEl.innerHTML = '<label for="natSel"><strong>Select a nationality:</strong></label>' +
+                         '<select id="natSel"></select>';
+      const sel = document.getElementById('natSel');
+      sel.innerHTML = all.map(d => `<option value="${d.nationality}">${d.nationality}</option>`).join('');
 
-    /* ----------  load GeoJSON and attach popups ---------- */
-    fetch('vic_lga_cleaned.geojson')
-      .then(r => r.json())
-      .then(geojson => {
-        L.geoJSON(geojson, {
-          style: { color:'#444', weight:1, fillColor:'#99ccff', fillOpacity:0.6 },
-          onEachFeature: (f, layer) => {
-            const name    = f.properties.LGA_NAME  || f.properties.lga_name  || 'Unknown';
-            const lgaCode = f.properties.LGA_CODE24|| f.properties.lga_code  || f.properties.code;
+      const svg = d3.select(plotEl).append('svg').attr('width', 900).attr('height', 550);
+      const m = { top: 60, right: 90, bottom: 60, left: 200 };
+      const w = +svg.attr('width') - m.left - m.right;
+      const h = +svg.attr('height') - m.top - m.bottom;
+      const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+      const x = d3.scaleLinear().range([0, w]);
+      const y = d3.scaleBand().range([0, h]).padding(0.1);
+      const colour = d3.scaleOrdinal(d3.schemeCategory10);
+      const fmt = d3.format(',');
 
-            layer.bindPopup(`
-              <div style="width:260px">
-                <strong>${name}</strong><br/>
-                <button onclick="viewStats(${lgaCode})">View Statistics</button>
-                <button onclick="viewNationalities(${lgaCode}, '${name}')">View Nationalities</button>
-                <button onclick="viewLanguage(${lgaCode})">View Language</button>
-              </div>`);
-          }
-        }).addTo(map);
+      svg.append('text')
+        .attr('x', m.left + w / 2)
+        .attr('y', 16)
+        .attr('text-anchor', 'middle')
+        .attr('font-weight', 'bold')
+        .text(`Top 10 Nationalities in ${lgaName}`);
+
+      function draw(rows, animate = false) {
+        x.domain([0, d3.max(rows, d => d.count)]).nice();
+        y.domain(rows.map(d => d.nationality));
+
+        const bars = g.selectAll('rect').data(rows, d => d.nationality);
+        bars.exit().transition().duration(300).attr('width', 0).remove();
+        const enter = bars.enter().append('rect')
+          .attr('x', 0)
+          .attr('y', d => y(d.nationality))
+          .attr('height', y.bandwidth())
+          .attr('fill', d => colour(d.nationality))
+          .attr('opacity', 0)
+          .attr('width', 0);
+        const merged = enter.merge(bars);
+        (animate ? merged.transition().delay((_, i) => i * 40).duration(750)
+                 : merged.transition().duration(500))
+          .attr('y', d => y(d.nationality))
+          .attr('width', d => x(d.count))
+          .attr('opacity', 1);
+
+        merged.on('mouseover', function (e, d) {
+          merged.attr('opacity', 0.2);
+          d3.select(this).attr('opacity', 1);
+          const b = this.getBoundingClientRect();
+          const p = panel.getBoundingClientRect();
+          tooltip.html(`<strong>${d.nationality}</strong><br/>${d.count.toLocaleString()}`)
+                 .style('left', b.right - p.left + 8 + 'px')
+                 .style('top', b.top - p.top + b.height / 2 - 12 + 'px')
+                 .style('opacity', 1);
+        }).on('mouseout', () => {
+          merged.attr('opacity', 1);
+          tooltip.style('opacity', 0);
+        });
+
+        g.selectAll('.y-axis').remove();
+        g.append('g').attr('class', 'y-axis').call(d3.axisLeft(y));
+        g.selectAll('.x-grid').remove();
+        g.append('g').attr('class', 'x-grid')
+          .call(d3.axisTop(x).ticks(5).tickSize(-h).tickSizeOuter(0))
+          .call(g => g.select('.domain').remove())
+          .call(g => g.selectAll('line').attr('stroke', '#e0e0e0').attr('stroke-opacity', 0.7));
+      }
+
+      const top10 = all.slice(0, 10);
+      draw(top10, true);
+
+      sel.onchange = e => {
+        const chosen = e.target.value;
+        let subset = top10;
+        if (!top10.find(d => d.nationality === chosen)) {
+          subset = [...top10, all.find(d => d.nationality === chosen)];
+        }
+        draw(subset);
+      };
+    });
+}
+
+/* --- bar‑chart race --- */
+function viewNationalityRace(code, lgaName) {
+  fetch(`/api/lga/nationalities-race/${code}`)
+    .then(r => r.json())
+    .then(raw => {
+      const years = [...new Set(raw.map(d => d.year))].sort((a, b) => a - b);
+      const cumulativeByYear = new Map();
+      const running = new Map();
+      years.forEach(yr => {
+        raw.filter(d => d.year === yr).forEach(d => {
+          running.set(d.nationality, (running.get(d.nationality) || 0) + d.count);
+        });
+        cumulativeByYear.set(yr, new Map(running));
       });
 
-    /* ----------  Stats table ---------- */
-    function viewStats(code) {
-      fetch(`/api/lga/statistics-full?code=${code}`)
-        .then(r => r.json())
-        .then(d => {
-          showPanel('LGA Statistics');
-          plotEl.innerHTML = `
-            <ul>
-              <li>Born overseas: ${d.born_overseas}</li>
-              <li>Median age: ${d.median_age_years}</li>
-              <li>Proficient English: ${d.pct_proficient_english}%</li>
-              <li>Completed Year 12: ${d.pct_completed_year_12}%</li>
-              <li>Bachelor degree: ${d.pct_bachelor_degree}%</li>
-            </ul>`;
-        });
-    }
+      const frames = [];
+      for (let i = 0; i < years.length - 1; i++) {
+        const y0 = years[i], y1 = years[i + 1];
+        const t0 = cumulativeByYear.get(y0), t1 = cumulativeByYear.get(y1);
+        const span = y1 - y0;
+        for (let off = 0; off < span; off++) {
+          const year = y0 + off;
+          const interp = [...new Set([...t0.keys(), ...t1.keys()])].map(nat => {
+            const c0 = t0.get(nat) || 0;
+            const c1 = t1.get(nat) || c0;
+            return { nationality: nat, count: c0 + (c1 - c0) * (off / span) };
+          });
+          frames.push({ year, rows: interp.sort((a, b) => b.count - a.count).slice(0, 10) });
+        }
+      }
+      const last = years[years.length - 1];
+      frames.push({
+        year: last,
+        rows: [...cumulativeByYear.get(last).entries()].map(([n, c]) => ({ nationality: n, count: c }))
+                                        .sort((a, b) => b.count - a.count).slice(0, 10)
+      });
 
-    /* ----------  Horizontal bar: top-10 nationalities ---------- */
-    function viewNationalities(code, name) {
-      fetch(`/api/lga/nationalities/${code}`)
-        .then(r => r.json())
-        .then(raw => {
-          showPanel(`Top 10 Nationalities in ${name}`);
+      showPanel('Arrivals 1951–2021');
+      const svg = d3.select(plotEl).append('svg').attr('width', 900).attr('height', 550);
+      const m = { top: 60, right: 90, bottom: 60, left: 200 };
+      const w = +svg.attr('width') - m.left - m.right;
+      const h = +svg.attr('height') - m.top - m.bottom;
+      const g = svg.append('g').attr('transform', `translate(${m.left},${m.top})`);
+      const x = d3.scaleLinear().range([0, w]);
+      const y = d3.scaleBand().range([0, h]).padding(0.1);
+      const fmt = d3.format(',d');
+      const allNats = [...new Set(raw.map(d => d.nationality))];
+      const colour = d3.scaleOrdinal().domain(allNats)
+        .range(d3.quantize(d3.interpolateTurbo, allNats.length));
 
-          const svg = d3.select(plotEl)
-                        .append('svg')
-                        .attr('width', 900)
-                        .attr('height', 600);
+      const yAxisG = g.append('g');
+      const xAxisTop = g.append('g');
+      const yearLabel = svg.append('text')
+        .attr('x', m.left + w)
+        .attr('y', m.top + h + 30)
+        .attr('text-anchor', 'end')
+        .attr('font-size', 22)
+        .attr('font-weight', 'bold');
 
-          const m  = {top:10, right:10, bottom:40, left:150};
-          const w  = +svg.attr('width')  - m.left - m.right;
-          const h  = +svg.attr('height') - m.top  - m.bottom;
-          const g  = svg.append('g').attr('transform',`translate(${m.left},${m.top})`);
+      svg.append('text')
+        .attr('x', m.left + w / 2)
+        .attr('y', 16)
+        .attr('text-anchor', 'middle')
+        .attr('font-weight', 'bold')
+        .text(`Number of arrivals in ${lgaName}`);
 
-          const data = raw.sort((a,b)=>b.count-a.count).slice(0,10);
-          const y = d3.scaleBand().domain(data.map(d=>d.nationality))
-                                 .range([0,h]).padding(0.15);
-          const x = d3.scaleLinear().domain([0,d3.max(data,d=>d.count)]).nice().range([0,w]);
-          const col = d3.scaleOrdinal(d3.schemeCategory10);
+      function render(frame) {
+        const t = svg.transition().duration(200).ease(d3.easeLinear);
+        x.domain([0, d3.max(frame.rows, d => d.count)]);
+        y.domain(frame.rows.map(d => d.nationality));
 
-          g.selectAll('rect').data(data).enter()
-            .append('rect')
-              .attr('y', d=>y(d.nationality))
-              .attr('height', y.bandwidth())
-              .attr('x', 0)
-              .attr('width', 0)
-              .attr('fill', d=>col(d.nationality))
-            .transition().duration(750)
-              .attr('width', d=>x(d.count));
+        const bars = g.selectAll('rect').data(frame.rows, d => d.nationality);
+        bars.exit().transition(t).attr('width', 0).remove();
+        const enter = bars.enter().append('rect')
+          .attr('x', 0)
+          .attr('y', d => y(d.nationality))
+          .attr('height', y.bandwidth())
+          .attr('fill', d => colour(d.nationality))
+          .attr('width', 0);
+        enter.merge(bars).transition(t)
+          .attr('y', d => y(d.nationality))
+          .attr('width', d => x(d.count));
 
-          // g.selectAll('text.val').data(data).enter()
-          //   .append('text')
-          //     .attr('class','val')
-          //     .attr('y', d=>y(d.nationality)+y.bandwidth()/2+4)
-          //     .attr('x', d=>x(d.count)+4)
-          //     .text(d=>d.count);
+        const labels = g.selectAll('text.barLbl').data(frame.rows, d => d.nationality);
+        labels.exit().remove();
+        labels.enter().append('text').attr('class', 'barLbl')
+          .attr('text-anchor', 'start')
+          .attr('dy', '0.35em')
+          .merge(labels)
+          .transition(t)
+          .attr('x', d => x(d.count) + 6)
+          .attr('y', d => y(d.nationality) + y.bandwidth() / 2)
+          .tween('text', function (d) {
+            const i = d3.interpolateNumber(+this.textContent.replace(/,/g, '') || 0, d.count);
+            return t => this.textContent = fmt(i(t));
+          });
 
-          g.append('g').call(d3.axisLeft(y));
-          g.append('g').attr('transform',`translate(0,${h})`)
-                       .call(d3.axisBottom(x).ticks(4));
-        });
-    }
+        xAxisTop.transition(t).attr('transform', 'translate(0,0)').call(d3.axisTop(x).ticks(4));
+        yAxisG.transition(t).call(d3.axisLeft(y));
+        yearLabel.text(frame.year);
+      }
 
-    /* ----------  Pie: English proficiency for chosen language ---------- */
-    function viewLanguage(code) {
-      const lang = prompt('Enter a language (e.g. Mandarin):');
-      if (!lang) return;
+      let idx = 0;
+      render(frames[idx]);
+      const timer = d3.interval(() => {
+        idx += 1;
+        if (idx >= frames.length) timer.stop();
+        else render(frames[idx]);
+      }, 200);
+    });
+}
 
-      fetch(`/api/lga/language-proficiency/${code}?language=${encodeURIComponent(lang)}`)
-        .then(r => r.json())
-        .then(data => {
-          showPanel(`English Proficiency – ${lang}`);
-
-          const svg = d3.select(plotEl).append('svg')
-                        .attr('width', 280).attr('height', 220);
-          const R   = 100;
-          const g   = svg.append('g').attr('transform','translate(140,110)');
-          const pie = d3.pie().value(d=>d.count);
-          const arc = d3.arc().outerRadius(R).innerRadius(0);
-          const col = d3.scaleOrdinal(d3.schemeCategory10);
-
-          g.selectAll('path').data(pie(data)).enter()
-            .append('path')
-              .attr('d', arc)
-              .attr('fill',(d,i)=>col(i));
-
-          g.selectAll('text').data(pie(data)).enter()
-            .append('text')
-              .attr('transform',d=>`translate(${arc.centroid(d)})`)
-              .attr('text-anchor','middle')
-              .attr('font-size','10px')
-              .text(d=>d.data.english_profiency_level);
-        });
-    }
-  </script>
+/* --- language proficiency pie --- */
+function viewLanguage(code) {
+  const lang = prompt('Enter a language (e.g. Mandarin):');
+  if (!lang) return;
+  fetch(`/api/lga/language-proficiency/${code}?language=${encodeURIComponent(lang)}`)
+    .then(r => r.json())
+    .then(data => {
+      showPanel(`English Proficiency – ${lang}`);
+      const svg = d3.select(plotEl).append('svg').attr('width', 280).attr('height', 220);
+      const g = svg.append('g').attr('transform', 'translate(140,110)');
+      const pie = d3.pie().value(d => d.count);
+      const arc = d3.arc().outerRadius(100).innerRadius(0);
+      const col = d3.scaleOrdinal(d3.schemeCategory10);
+      g.selectAll('path').data(pie(data)).enter().append('path')
+        .attr('d', arc).attr('fill', (_, i) => col(i));
+      g.selectAll('text').data(pie(data)).enter().append('text')
+        .attr('transform', d => `translate(${arc.centroid(d)})`)
+        .attr('text-anchor', 'middle').attr('font-size', '10px')
+        .text(d => d.data.english_profiency_level);
+    });
+}
+</script>
 </body>
 </html>

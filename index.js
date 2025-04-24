@@ -83,8 +83,7 @@ app.get(`/api/lga/nationalities/:lgaCode`, async (req, res) => {
       JOIN lga_map."Nationality" n ON ln.nationality_id = n.nationality_id
       WHERE ln.lga_code = $1
       AND n.nationality NOT IN ('Australia', 'New Zealand', 'England') -- exclude Australian and New Zealander nationalities as not needed. 
-      ORDER BY ln.count DESC
-      LIMIT 10`, 
+      ORDER BY ln.count DESC`,
       [lgaCode] // use parameterized query to prevent SQL injection
     );
     res.json(result.rows);  
@@ -93,6 +92,26 @@ app.get(`/api/lga/nationalities/:lgaCode`, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.get('/api/lga/nationalities-race/:lgaCode', async (req, res) => {
+  const { lgaCode } = req.params;
+  try {
+    const sql = `
+      SELECT lny.year, n.nationality, lny.count
+      FROM lga_map."LgaNationalityYear" AS lny
+      JOIN lga_map."Nationality" AS n
+        ON n.nationality_id = lny.nationality_id
+      WHERE lny.lga_code = $1
+      ORDER BY lny.year, lny.count DESC;`;
+
+    const { rows } = await pool.query(sql, [lgaCode]);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching race data:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // init server 
 const PORT = process.env.PORT || 3000;

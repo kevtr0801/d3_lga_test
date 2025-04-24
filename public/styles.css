@@ -11,27 +11,56 @@
     position: absolute;
     top: 20px;
     right: 20px;
-    width:1200px;           
-    max-height: 90vh;
+    width:900;           
+    height: 600px;
     overflow-y: auto;
     background: #fff;
-    border: 1px solid #ccc;
+    border: 1px solid #161616;
     box-shadow: 0 0 10px rgba(0,0,0,.2);
     padding: 15px;
     display: none;
     z-index: 999;
   }
-  
+  #popup-plot {
+    width: 900px;
+    height: 550px;
+  }
+
   #chart-panel h4 { margin: 0 0 8px; }
   
   button { margin: 5px 0; }
   
-  /* bars in nationality chart */
-  .bar {
-    fill: #5a9;
+
+  /* for interactive bar chart */
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: #fff;
+    border: 1px solid #999;
+    border-radius: 3px;
+    padding: 6px 8px;
+    font-size: 12px;
+    box-shadow: 0 0 6px rgba(0,0,0,.15);
+    opacity: 0;
+    transition: opacity .15s;
+    z-index: 1001;               
   }
-  
-  .bar:hover {
-    fill: #f3903f;
-  }
-  
+
+ 
+#popup-plot {
+  background-color: #f0f4f8;   
+}
+
+#popup-plot svg {
+  background-color: #f0f4f8;
+}
+/* font */
+body, #chart-panel svg text {
+  font-family: "Nunito", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.chart-title {
+  font-size: 18px;
+  font-weight: 700;
+}
