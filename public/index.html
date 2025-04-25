@@ -355,7 +355,8 @@ function viewLanguage(code) {
         .attr('transform', d => `translate(${arc.centroid(d)})`)
         .attr('text-anchor', 'middle').attr('font-size', '10px')
         .text(d => d.data.english_profiency_level);
-    });
+    })
+    .catch(err => console.error("Error fetching language proficiency data:", err));
 }
 
 </script>
