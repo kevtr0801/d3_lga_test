@@ -1,3 +1,5 @@
+New
+
 <!DOCTYPE html>
 <!-- Leaflet + D3 demo for Victoria LGAs (prettified, same logic) -->
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;700&display=swap" rel="stylesheet">
@@ -11,6 +13,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  
 
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -46,6 +50,16 @@ function showPanel(title) {
   panel.style.display = 'block';
   plotEl.innerHTML = '';
   tooltip.style('opacity', 0);
+}
+
+function addSource() {
+  const a = document.createElement('a');
+  a.href = 'https://www.abs.gov.au/census';
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.textContent = 'Data Source: ABS Census 2021';
+  a.className = 'data-source';
+  plotEl.appendChild(a);
 }
 
 /* load GeoJSON + pop‑ups */
@@ -107,12 +121,27 @@ function viewNationalities(code, lgaName) {
       const colour = d3.scaleOrdinal(d3.schemeCategory10);
       const fmt = d3.format(',');
 
-      svg.append('text')
-        .attr('x', m.left + w / 2)
-        .attr('y', 16)
+      const titleG = svg.append('g')
+        .attr('class', 'plot-title')
+        .attr('transform', `translate(${m.left + w / 2}, 20)`);
+
+      const titleTxt = titleG.append('text')
         .attr('text-anchor', 'middle')
         .attr('font-weight', 'bold')
+        .attr('font-size', '22px')
         .text(`Top 10 Nationalities in ${lgaName}`);
+
+      const iconSize = 25;                                
+      const txtBox   = titleTxt.node().getBBox();
+
+      titleG.append('svg')                                
+        .attr('x',  txtBox.width / 2 + 3)              
+        .attr('y', -iconSize / 2)                       
+        .attr('width',  iconSize)
+        .attr('height', iconSize)
+        .html(`
+        <path d="M5.793 1a1 1 0 0 1 1.414 0l.647.646a.5.5 0 1 1-.708.708L6.5 1.707 2 6.207V12.5a.5.5 0 0 0 .5.5.5.5 0 0 1 0 1A1.5 1.5 0 0 1 1 12.5V7.207l-.146.147a.5.5 0 0 1-.708-.708zm3 1a1 1 0 0 1 1.414 0L12 3.793V2.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v3.293l1.854 1.853a.5.5 0 0 1-.708.708L15 8.207V13.5a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 4 13.5V8.207l-.146.147a.5.5 0 1 1-.708-.708zm.707.707L5 7.207V13.5a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V7.207z" 
+              fill="currentColor"/>`);
 
       function draw(rows, animate = false) {
         x.domain([0, d3.max(rows, d => d.count)]).nice();
@@ -139,10 +168,17 @@ function viewNationalities(code, lgaName) {
           d3.select(this).attr('opacity', 1);
           const b = this.getBoundingClientRect();
           const p = panel.getBoundingClientRect();
-          tooltip.html(`<strong>${d.nationality}</strong><br/>${d.count.toLocaleString()}`)
-                 .style('left', b.right - p.left + 8 + 'px')
-                 .style('top', b.top - p.top + b.height / 2 - 12 + 'px')
-                 .style('opacity', 1);
+          tooltip.html(`<strong>
+            <svg xmlns="http://www.w3.org/2000/svg"
+            width="14" height="14" viewBox="0 0 16 16"
+            style="vertical-align:middle;margin-right:4px">
+            <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6m-5.784 6A2.24 2.24 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.3 6.3 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1zM4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5"/>
+            </svg>Population</strong><br/>
+            ${d.count.toLocaleString()}`)
+            .style('left', b.right - p.left + 8 + 'px')
+            .style('top',  b.top  - p.top  + b.height / 2 - 12 + 'px')
+            .style('opacity', 1);
+
         }).on('mouseout', () => {
           merged.attr('opacity', 1);
           tooltip.style('opacity', 0);
@@ -168,6 +204,7 @@ function viewNationalities(code, lgaName) {
         }
         draw(subset);
       };
+      addSource();
     });
 }
 
@@ -230,15 +267,31 @@ function viewNationalityRace(code, lgaName) {
         .attr('font-size', 22)
         .attr('font-weight', 'bold');
 
-      svg.append('text')
-        .attr('x', m.left + w / 2)
-        .attr('y', 16)
+        const titleG = svg.append('g')
+        .attr('class', 'plot-title')
+        .attr('transform', `translate(${m.left + w / 2}, 20)`);
+
+      const titleTxt = titleG.append('text')
         .attr('text-anchor', 'middle')
         .attr('font-weight', 'bold')
-        .text(`Number of arrivals in ${lgaName}`);
+        .attr('font-size', '22px')
+        .text(`Number of Yearly Arrivals in ${lgaName}`);
+
+      const iconSize = 30;                                
+      const txtBox   = titleTxt.node().getBBox();
+
+      titleG.append('svg')                                
+        .attr('x',  txtBox.width / 2 + 3)              
+        .attr('y', -iconSize / 2)                       
+        .attr('width',  iconSize)
+        .attr('height', iconSize)
+        .html(`
+       <path d="M9.5 1.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0M6.44 3.752A.75.75 0 0 1 7 3.5h1.445c.742 0 1.32.643 1.243 1.38l-.43 4.083a1.8 1.8 0 0 1-.088.395l-.318.906.213.242a.8.8 0 0 1 .114.175l2 4.25a.75.75 0 1 1-1.357.638l-1.956-4.154-1.68-1.921A.75.75 0 0 1 6 8.96l.138-2.613-.435.489-.464 2.786a.75.75 0 1 1-1.48-.246l.5-3a.75.75 0 0 1 .18-.375l2-2.25Z"/>
+      <path d="M6.25 11.745v-1.418l1.204 1.375.261.524a.8.8 0 0 1-.12.231l-2.5 3.25a.75.75 0 1 1-1.19-.914zm4.22-4.215-.494-.494.205-1.843.006-.067 1.124 1.124h1.44a.75.75 0 0 1 0 1.5H11a.75.75 0 0 1-.531-.22Z"/>
+    `);   // person-walking icon
 
       function render(frame) {
-        const t = svg.transition().duration(200).ease(d3.easeLinear);
+        const t = svg.transition().duration(250).ease(d3.easeLinear);
         x.domain([0, d3.max(frame.rows, d => d.count)]);
         y.domain(frame.rows.map(d => d.nationality));
 
@@ -279,7 +332,7 @@ function viewNationalityRace(code, lgaName) {
         idx += 1;
         if (idx >= frames.length) timer.stop();
         else render(frames[idx]);
-      }, 200);
+      }, 250);
     });
 }
 
@@ -307,3 +360,4 @@ function viewLanguage(code) {
 </script>
 </body>
 </html>
+
