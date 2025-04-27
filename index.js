@@ -93,6 +93,7 @@ app.get(`/api/lga/nationalities/:lgaCode`, async (req, res) => {
   }
 });
 
+// for bar chart race feature
 app.get('/api/lga/nationalities-race/:lgaCode', async (req, res) => {
   const { lgaCode } = req.params;
   try {
@@ -111,6 +112,62 @@ app.get('/api/lga/nationalities-race/:lgaCode', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// for stats feature
+
+app.get('/api/lga/statistics-full', async (req, res) => {
+  const code = Number(req.query.code); 
+  if (!code) {
+    return res.status(400).json({ error: 'Missing or invalid ?code= param' });
+  }
+  try {
+    const sql = `
+      SELECT *
+      FROM   lga_map."LgaStatistics"        
+      WHERE  lga_code = $1
+      LIMIT  1;
+    `;
+    const { rows } = await pool.query(sql, [code]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'No stats for that LGA code' });
+    }
+    res.json(rows[0]);               
+  } catch (err) {
+    console.error('Stats lookup failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// for language proficiency feature
+app.get('/api/lga/language-proficiency/:lgaCode', async (req, res) => {
+  const lgaCode = Number(req.params.lgaCode);
+  if (Number.isNaN(lgaCode)) {
+    return res.status(400).json({ error: 'Invalid LGA code' });
+  }
+  try {
+    const sql = `
+      SELECT
+        lang.language                          AS language,
+        llp.english_profiency_level           AS level,
+        llp.count                              AS count
+      FROM   lga_map."LgaLanguageProficiency" llp
+      JOIN   lga_map."Language"             lang
+        ON   lang.language_id = llp.language_id
+      WHERE  llp.lga_code = $1
+      ORDER  BY llp.count DESC;
+    `;
+    const { rows } = await pool.query(sql, [lgaCode]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'No language data for that LGA code' });
+    }
+    res.json(rows);
+  } catch (err) {
+    console.error('Language lookup failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 
 // init server 

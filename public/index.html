@@ -1,5 +1,3 @@
-New
-
 <!DOCTYPE html>
 <!-- Leaflet + D3 demo for Victoria LGAs (prettified, same logic) -->
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;700&display=swap" rel="stylesheet">
@@ -13,10 +11,12 @@ New
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
-
   
 
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
 </head>
 <body>
 
@@ -52,15 +52,19 @@ function showPanel(title) {
   tooltip.style('opacity', 0);
 }
 
-function addSource() {
+/**
+ * Append a data‐source link under the chart
+ */
+ function addSource(text, url) {
   const a = document.createElement('a');
-  a.href = 'https://www.abs.gov.au/census';
-  a.target = '_blank';
-  a.rel = 'noopener';
-  a.textContent = 'Data Source: ABS Census 2021';
-  a.className = 'data-source';
+  a.href       = url;
+  a.target     = '_blank';
+  a.rel        = 'noopener';
+  a.textContent= text;
+  a.className  = 'data-source';
   plotEl.appendChild(a);
 }
+
 
 /* load GeoJSON + pop‑ups */
 fetch('vic_lga_cleaned.geojson')
@@ -77,28 +81,77 @@ fetch('vic_lga_cleaned.geojson')
             <button onclick="viewStats(${code})">View Statistics</button>
             <button onclick="viewNationalities(${code}, '${name}')">View Nationalities</button>
             <button onclick="viewNationalityRace(${code}, '${name}')">Play bar-race</button>
-            <button onclick="viewLanguage(${code})">View Language</button>
+           <button onclick="viewLanguage(${code}, '${name}')">View Language</button>
           </div>`);
       }
     }).addTo(map);
   });
 
-/* --- stats list --- */
-function viewStats(code) {
+
+  function viewStats(code) {
   fetch(`/api/lga/statistics-full?code=${code}`)
     .then(r => r.json())
     .then(d => {
       showPanel('LGA Statistics');
-      plotEl.innerHTML = `
-        <ul>
-          <li>Born overseas: ${d.born_overseas}</li>
-          <li>Median age: ${d.median_age_years}</li>
-          <li>Proficient English: ${d.pct_proficient_english}%</li>
-          <li>Completed Year 12: ${d.pct_completed_year_12}%</li>
-          <li>Bachelor degree: ${d.pct_bachelor_degree}%</li>
-        </ul>`;
+      addSource(
+        'Data Source: ABS Data Region Methodology (2011–24)',
+        'https://www.abs.gov.au/methodologies/data-region-methodology/2011-24'
+      );
+
+      const cards = [
+        { key:'total_businesses',               label:'Businesses',            unit:'',
+          icon:'bi-shop' },
+        { key:'total_employed_over_15',         label:'Employed (15+)',        unit:'',
+          icon:'bi-briefcase-fill' },
+        { key:'born_overseas',                  label:'Born overseas',         unit:'',
+          icon:'bi-globe2' },
+        { key:'pct_arrived_within_5_years',     label:'Arrived ≤5 yrs',        unit:'%',
+          icon:'bi-airplane-engines' },
+        { key:'pct_proficient_english',         label:'Proficient English',    unit:'%',
+          icon:'bi-chat-dots-fill' },
+        { key:'pct_speaks_other_lang_at_home', label:'Other lang @home',  unit:'%',
+          icon:'bi-translate' },
+        { key:'median_age_years',               label:'Median age',            unit:'yrs',
+          icon:'bi-person-vcard' },
+        { key:'pct_completed_year_12',          label:'Year-12 completed',     unit:'%',
+          icon:'bi-mortarboard' },
+        { key:'pct_certificate',                label:'Certificate',           unit:'%',
+          icon:'bi-award-fill' },
+        { key:'pct_bachelor_degree',            label:'Bachelor degree',       unit:'%',
+          icon:'bi-mortarboard-fill' },
+        { key:'pct_postgraduate',               label:'Post-graduate',         unit:'%',
+          icon:'bi-journal-richtext' },
+        { key:'pct_managers',                   label:'Managers',              unit:'%',
+          icon:'bi-diagram-3-fill' },
+        { key:'pct_professionals',              label:'Professionals',         unit:'%',
+          icon:'bi-person-workspace' },
+        { key:'pct_labourers',                  label:'Labourers',             unit:'%',
+          icon:'bi-hammer' }
+      ];
+
+      /* HTML grid */
+      const grid = document.createElement('div');
+      grid.className = 'kpi-grid';
+
+      grid.innerHTML = cards.map(c => {
+        const raw = d[c.key];
+        const val = raw == null ? '—'
+                  : c.unit === '%'  ? (+raw).toFixed(1) + ' %'   // thin space before %
+                  : c.unit === 'yrs'? (+raw).toFixed(1) + ' yrs'
+                  : (+raw).toLocaleString();
+        return `
+          <div class="kpi-card">
+            <i class="bi ${c.icon} kpi-icon"></i>
+            <div class="kpi-value">${val}</div>
+            <div class="kpi-label">${c.label}</div>
+          </div>`;
+      }).join('');
+
+      plotEl.appendChild(grid);
     });
 }
+
+
 
 /* --- nationality bar chart --- */
 function viewNationalities(code, lgaName) {
@@ -204,7 +257,10 @@ function viewNationalities(code, lgaName) {
         }
         draw(subset);
       };
-      addSource();
+      addSource(
+        'Data Source: ABS Census DataPacks',
+        'https://www.abs.gov.au/census/find-census-data/datapacks'
+      );
     });
 }
 
@@ -246,6 +302,7 @@ function viewNationalityRace(code, lgaName) {
       });
 
       showPanel('Arrivals 1951–2021');
+      
       const svg = d3.select(plotEl).append('svg').attr('width', 900).attr('height', 550);
       const m = { top: 60, right: 90, bottom: 60, left: 200 };
       const w = +svg.attr('width') - m.left - m.right;
@@ -256,7 +313,7 @@ function viewNationalityRace(code, lgaName) {
       const fmt = d3.format(',d');
       const allNats = [...new Set(raw.map(d => d.nationality))];
       const colour = d3.scaleOrdinal().domain(allNats)
-        .range(d3.quantize(d3.interpolateTurbo, allNats.length));
+        .range(d3.quantize(d3.interpolateSinebow, allNats.length));
 
       const yAxisG = g.append('g');
       const xAxisTop = g.append('g');
@@ -333,30 +390,17 @@ function viewNationalityRace(code, lgaName) {
         if (idx >= frames.length) timer.stop();
         else render(frames[idx]);
       }, 250);
+
+      addSource(
+        'Data Source: ABS Census DataPacks',
+        'https://www.abs.gov.au/census/find-census-data/datapacks'
+      );
     });
 }
 
-/* --- language proficiency pie --- */
-function viewLanguage(code) {
-  const lang = prompt('Enter a language (e.g. Mandarin):');
-  if (!lang) return;
-  fetch(`/api/lga/language-proficiency/${code}?language=${encodeURIComponent(lang)}`)
-    .then(r => r.json())
-    .then(data => {
-      showPanel(`English Proficiency – ${lang}`);
-      const svg = d3.select(plotEl).append('svg').attr('width', 280).attr('height', 220);
-      const g = svg.append('g').attr('transform', 'translate(140,110)');
-      const pie = d3.pie().value(d => d.count);
-      const arc = d3.arc().outerRadius(100).innerRadius(0);
-      const col = d3.scaleOrdinal(d3.schemeCategory10);
-      g.selectAll('path').data(pie(data)).enter().append('path')
-        .attr('d', arc).attr('fill', (_, i) => col(i));
-      g.selectAll('text').data(pie(data)).enter().append('text')
-        .attr('transform', d => `translate(${arc.centroid(d)})`)
-        .attr('text-anchor', 'middle').attr('font-size', '10px')
-        .text(d => d.data.english_profiency_level);
-    });
-}
+
+
+
 </script>
 </body>
 </html>
