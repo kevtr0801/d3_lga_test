@@ -167,6 +167,28 @@ app.get('/api/lga/language-proficiency/:lgaCode', async (req, res) => {
   }
 });
 
+// for council info feature
+app.get('/api/lga/council/:lgaCode', async (req, res) => {
+  const lgaCode = Number(req.params.lgaCode);
+  if (Number.isNaN(lgaCode)) {
+    return res.status(400).json({ error: 'Invalid LGA code' });
+  }
+  try {
+    const sql = `
+      SELECT *
+      FROM   lga_map."CouncilInfo"
+      WHERE  lga_code = $1`
+    ;
+    const { rows } = await pool.query(sql, [lgaCode]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'No language data for that LGA code' });
+    }
+    res.json(rows);
+  } catch (err) {
+    console.error('Language lookup failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 
