@@ -398,7 +398,244 @@ function viewNationalityRace(code, lgaName) {
     });
 }
 
+// 1) Map each language to its primary ISO country code
+const languageToCountry = {
+  Afrikaans: 'ZA', Arabic: 'SA', AIndLng: 'IN', Canton: 'HK',
+  Mandarin: 'CN', Croatian: 'HR', French: 'FR', German: 'DE',
+  Greek: 'GR', Bengali: 'BD', Guj: 'IN', Hindi: 'IN',
+  Nepali: 'NP', Punjabi: 'PK', Sinhal: 'LK', Urdu: 'PK',
+  Italian: 'IT', Japan: 'JP', Khmer: 'KH', Korean: 'KR',
+  Macedon: 'MK', Malayalam: 'IN', Persian: 'IR', Polish: 'PL',
+  Portuguese: 'PT', Russian: 'RU', Samoan: 'WS', Serbian: 'RS',
+  Filipin: 'PH', Indon: 'ID', Tagalog: 'PH', Spanish: 'ES',
+  Tamil: 'IN', Thai: 'TH', Turkish: 'TR', Vietnamese: 'VN'
+};
 
+// 2) flag palette colours
+const flagColors = {
+  CN: ['#DE2910','#FFDE00'],      // stays red/yellow
+  DE: ['#000000','#FFCE00'],      // black/gold (drop the red)
+  FR: ['#0055A4','#EF4135'],      // blue/red (drop the white)
+  IN: ['#138808','#FF9933'],      // green/orange (drop the white)
+  IT: ['#008C45','#CD212A'],      // green/red (drop the white)
+  JP: ['#FFFFFF','#BC002D'],      // still white/red
+  KR: ['#C60C30','#003478'],      // red/blue (drop the white)
+  SA: ['#006C35','#FFFFFF'],      // keep green/white since it’s only two
+  ZA: ['#006847','#FFB612'],
+  HK: ['#DE2910','#FFFFFF'],      // red/white
+  HR: ['#0000FF','#FF0000'],      // blue/red (drop the white)
+  GR: ['#0D5EAF','#FFFFFF'],      // blue/white
+  BD: ['#006A4E','#F42A41'],
+  NP: ['#BE1E2D','#003893'],      // red/blue (drop the white)
+  PK: ['#01411C','#FFFFFF'],
+  LK: ['#800000','#FFB612'],
+  PL: ['#DC143C','#FFFFFF'],      // red/white
+  PT: ['#FF0000','#006600'],      // red/green (swap order as you like)
+  RU: ['#0039A6','#D52B1E'],      // blue/red (drop the white)
+  ES: ['#AA151B','#F1BF00'],
+  TH: ['#DC241F','#003478'],      // red/blue
+  TR: ['#E30A17','#FFFFFF'],
+  VN: ['#DA251D','#FFFF00'],
+  PH: ['#CE1126','#0038A8'],      // red/blue (drop yellow & white)
+  ID: ['#FF0000','#FFFFFF'],
+  RS: ['#0000C8','#FF0000'],      // blue/red
+  WS: ['#D21034','#00205B'],
+  MK: ['#FF0000','#FFDA44'],
+  KH: ['#ED1B24','#032EA1']
+};
+
+// 0) Native‐name lookup for all your DB languages
+const nativeNames = {
+  Afrikaans: 'Afrikaans',
+  Arabic:    'العربية',
+  AIndLng:   '',               // no single native name
+  Canton:    '廣東話',
+  Mandarin:  '中文',
+  Croatian:  'hrvatski',
+  French:    'Français',
+  German:    'Deutsch',
+  Greek:     'Ελληνικά',
+  Bengali:   'বাংলা',
+  Guj:       'ગુજરાતી',
+  Hindi:     'हिन्दी',
+  Nepali:    'नेपाली',
+  Punjabi:   'ਪੰਜਾਬੀ',
+  Sinhal:    'සිංහල',
+  Urdu:      'اردو',
+  Italian:   'Italiano',
+  Japan:     '日本語',
+  Khmer:     'ភាសាខ្មែរ',
+  Korean:    '한국어',
+  Macedon:   'македонски',
+  Malayalam: 'മലയാളം',
+  Persian:   'فارسی',
+  Polish:    'Polski',
+  Portuguese:'Português',
+  Russian:   'Русский',
+  Samoan:    'Gagana Samoa',
+  Serbian:   'српски',
+  Filipin:   'Filipino',
+  Indon:     'Bahasa Indonesia',
+  Tagalog:   'Tagalog',
+  Spanish:   'Español',
+  Tamil:     'தமிழ்',
+  Thai:      'ไทย',
+  Turkish:   'Türkçe',
+  Vietnamese:'Tiếng Việt'
+};
+
+
+/* --- language proficiency pie --- */
+function viewLanguage(lgaCode, lgaName) {
+  fetch(`/api/lga/language-proficiency/${lgaCode}`)
+    .then(r => r.json())
+    .then(all => {
+      showPanel(`Language Proficiency – ${lgaName}`);
+      plotEl.innerHTML = `
+        <label for="langSel"><strong>Select a language:</strong></label>
+        <select id="langSel" style="margin-bottom:12px;"></select>
+        <div id="langPie"></div>
+      `;
+
+      const sel   = document.getElementById('langSel');
+      
+      const langs = Array.from(new Set(all.map(d => d.language))).sort();
+      sel.innerHTML = langs.map(l => {
+        const nat = nativeNames[l] || '';
+        return `<option value="${l}">${l}${nat ? ' ' + nat : ''}</option>`;
+      }).join('');
+
+
+      sel.onchange = () => drawPie(sel.value);
+      drawPie(langs[0]);
+
+      function drawPie(language) {
+        const filtered = all.filter(d => d.language === language);
+        const container = d3.select('#langPie').html('');
+
+        const nat = nativeNames[language] || '';
+        // build a label like "Mandarin 中文" or just "AIndLng" if none
+        const langLabel = nat ? `${language} ${nat}` : language;
+
+        // Title
+        container.append('div')
+          .style('text-align','center')
+          .style('margin-bottom','8px')
+          .style('font-weight','bold')
+          .text(`English Proficiency Level for ${langLabel}`);
+
+        if (!filtered.some(d => d.count > 0)) {
+          return container.append('p')
+            .style('text-align','center')
+            .text(`No data for ${language} in ${lgaName}.`);
+        }
+
+        // prepare data
+        const positive = filtered.filter(d => d.count > 0);
+        const total    = d3.sum(positive, d => d.count);
+        const data     = positive.map(d => ({
+          name:  d.level,
+          value: d.count/total*100
+        }));
+
+        // pick slice colors
+        const cc     = languageToCountry[language];
+        const slices = (cc && flagColors[cc]) ? flagColors[cc] : d3.schemeCategory10;
+        const color  = d3.scaleOrdinal()
+                           .domain(data.map(d=>d.name))
+                           .range(slices.slice(0,data.length));
+
+        // line color = white if flag has 3+ colors
+        const lineColor = (cc && flagColors[cc] && flagColors[cc].length>2)
+                          ? 'white'
+                          : 'black';
+
+        // dimensions
+        const width   = 640,
+              height  = 420,
+              radius  = Math.min(width,height)/2 - 20;
+
+        const pieGen = d3.pie().sort(null).value(d=>d.value);
+        const arcGen = d3.arc().innerRadius(0).outerRadius(radius);
+        const arcs   = pieGen(data);
+
+        // draw SVG
+        const svg = container.append('svg')
+          .attr('width',width)
+          .attr('height',height)
+          .attr('overflow','visible')
+          .style('display','block')
+          .style('margin','0 auto')
+          .append('g')
+            .attr('transform',`translate(${width/2},${height/2})`);
+
+        // slices
+        const paths = svg.append('g').attr('stroke','white')
+          .selectAll('path').data(arcs).join('path')
+            .attr('fill', d=>color(d.data.name))
+            .each(function(d){ this._current = {startAngle:d.startAngle,endAngle:d.startAngle}; });
+
+        paths.transition().duration(800)
+             .attrTween('d', function(d){
+               const i = d3.interpolate(this._current,d);
+               this._current = i(1);
+               return t=>arcGen(i(t));
+             });
+
+        // tooltips
+        paths.append('title')
+             .text(d=>`${d.data.name}: ${d.data.value.toFixed(1)}%`);
+
+        // labels + lines
+        const labelOffset = radius+20;
+        const outerArc = d3.arc().innerRadius(radius*1.05).outerRadius(radius*1.05);
+
+        // lines
+        svg.append('g').attr('class','lines')
+          .selectAll('polyline')
+          .data(arcs).join('polyline')
+            .attr('points', d=>{
+              const c   = arcGen.centroid(d);
+              const o1  = outerArc.centroid(d);
+              const mid = (d.startAngle + d.endAngle)/2;
+              const o2  = [o1[0],o1[1]];
+              o2[0] = labelOffset * (mid < Math.PI ? 1 : -1);
+              return [c,o1,o2];
+            })
+            .attr('stroke', lineColor)
+            .attr('fill','none')
+            .attr('opacity',0.5);
+
+        // text
+        svg.append('g').attr('class','labels')
+          .selectAll('text')
+          .data(arcs).join('text')
+            .attr('font-size','10px')
+            .attr('transform', d=>{
+              const mid = (d.startAngle + d.endAngle)/2;
+              const o   = outerArc.centroid(d);
+              o[0] = labelOffset * (mid < Math.PI ? 1 : -1);
+              return `translate(${o})`;
+            })
+            .attr('text-anchor', d=>{
+              const mid = (d.startAngle + d.endAngle)/2;
+              return mid < Math.PI ? 'start' : 'end';
+            })
+          .call(t => t.append('tspan')
+              .attr('font-weight','bold')
+              .text(d=>d.data.name))
+              .call(t => t
+              .append('tspan')
+                .attr('x',0).attr('dy','1em').attr('fill-opacity',0.6)
+                .text(d=>d.data.value.toFixed(1)+'%'));
+
+        addSource(
+          'Data Source: ABS Census DataPacks',
+          'https://www.abs.gov.au/census/find-census-data/datapacks'
+        );
+      }
+    });
+}
 
 
 </script>
